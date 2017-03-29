@@ -8,21 +8,23 @@
  */
 namespace Piwik\Plugins\Actions;
 
+use Piwik\DataTable\Row;
+
 use Exception;
 use Piwik\Archive;
 use Piwik\Common;
 use Piwik\DataTable;
 use Piwik\Date;
+use Piwik\Metrics;
 use Piwik\Metrics as PiwikMetrics;
 use Piwik\Piwik;
-use Piwik\Plugin\Report;
+use Piwik\Plugin\ReportsProvider;
+use Piwik\Plugins\Actions\Actions\ActionSiteSearch;
 use Piwik\Plugins\Actions\Columns\Metrics\AveragePageGenerationTime;
 use Piwik\Plugins\Actions\Columns\Metrics\AverageTimeOnPage;
 use Piwik\Plugins\Actions\Columns\Metrics\BounceRate;
 use Piwik\Plugins\Actions\Columns\Metrics\ExitRate;
 use Piwik\Plugins\CustomVariables\API as APICustomVariables;
-use Piwik\Plugins\Actions\Actions\ActionSiteSearch;
-use Piwik\Plugin\ReportsProvider;
 use Piwik\Tracker\Action;
 use Piwik\Tracker\PageUrl;
 
@@ -62,7 +64,9 @@ class API extends \Piwik\Plugin\API
         $requestedColumns = Piwik::getArrayFromApiParameter($columns);
         $columns = $report->getMetricsRequiredForReport($allColumns = null, $requestedColumns);
 
-        $inDbColumnNames = array_map(function ($value) { return 'Actions_' . $value; }, $columns);
+        $inDbColumnNames = array_map(function ($value) {
+            return 'Actions_' . $value;
+        }, $columns);
         $dataTable = $archive->getDataTableFromNumeric($inDbColumnNames);
 
         $dataTable->deleteColumns(array_diff($requestedColumns, $columns));
@@ -92,9 +96,12 @@ class API extends \Piwik\Plugin\API
                                 $depth = false, $flat = false)
     {
         $dataTable = Archive::createDataTableFromArchive('Actions_actions_url', $idSite, $period, $date, $segment, $expanded, $flat, $idSubtable, $depth);
-
         $this->filterActionsDataTable($dataTable);
-
+        foreach ($dataTable->getRows() as $visit) {
+            $formatter = new Metrics\Formatter\Html();
+            $nbTimeTotal = $formatter->getPrettyTimeFromSeconds($visit->getColumn('13'), $displayAsSentence = false);
+            $visit->addColumn("sum_time_spent_format",$nbTimeTotal);
+        }
         return $dataTable;
     }
 
@@ -182,7 +189,11 @@ class API extends \Piwik\Plugin\API
         $dataTable = Archive::createDataTableFromArchive('Actions_actions', $idSite, $period, $date, $segment, $expanded, $flat, $idSubtable);
 
         $this->filterActionsDataTable($dataTable);
-
+        foreach ($dataTable->getRows() as $visit) {
+            $formatter = new Metrics\Formatter\Html();
+            $nbTimeTotal = $formatter->getPrettyTimeFromSeconds($visit->getColumn('13'), $displayAsSentence = false);
+            $visit->addColumn("sum_time_spent_format",$nbTimeTotal);
+        }
         return $dataTable;
     }
 
@@ -473,9 +484,9 @@ class API extends \Piwik\Plugin\API
     {
         $dataTable->filter('ColumnCallbackDeleteRow',
             array(PiwikMetrics::INDEX_PAGE_ENTRY_NB_VISITS,
-                  function ($visits) {
-                      return !strlen($visits);
-                  }
+                function ($visits) {
+                    return !strlen($visits);
+                }
             )
         );
     }
@@ -489,9 +500,9 @@ class API extends \Piwik\Plugin\API
     {
         $dataTable->filter('ColumnCallbackDeleteRow',
             array(PiwikMetrics::INDEX_PAGE_EXIT_NB_VISITS,
-                  function ($visits) {
-                      return !strlen($visits);
-                  })
+                function ($visits) {
+                    return !strlen($visits);
+                })
         );
     }
 
@@ -506,4 +517,110 @@ class API extends \Piwik\Plugin\API
             $table->setMetadata(DataTable::EXTRA_PROCESSED_METRICS_METADATA_NAME, $extraProcessedMetrics);
         });
     }
+
+    public function getBestNTArticles($idSite, $period, $date)
+    {
+        $data = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => $period,
+            'date' => $date,
+            'segment' => 'eventCategory==DAILY_NEWS'
+        ));
+        $data->applyQueuedFilters();
+
+        $result = $data->getEmptyClone($keepFilters = false);
+
+        foreach ($data->getRows() as $visitRow) {
+            $pageTitle = $visitRow->getColumn('label');
+            $nbVisits = $visitRow->getColumn('nb_events');
+            $nbUniquesVisites = $visitRow->getColumn('nb_uniq_visitors');
+
+            $result->addRowFromSimpleArray(array(
+                'Nom' => $pageTitle,
+                'Nombre de visites' => $nbVisits,
+                'Nombre de visites par visiteur unique' => $nbUniquesVisites
+            ));
+        }
+
+        return $result;
+    }
+
+    public function getBestExternalAppsScreen($idSite, $period, $date)
+    {
+        $data = \Piwik\API\Request::processRequest('Actions.getPageUrls', array(
+            'idSite' => $idSite,
+            'period' => $period,
+            'date' => $date,
+            'segment' => ""
+        ));
+        $data->applyQueuedFilters();
+
+        $result = $data->getEmptyClone($keepFilters = false);
+        $formatter = new Metrics\Formatter\Html();
+        foreach ($data->getRows() as $visitRow) {
+            $pageTitle = $visitRow->getColumn('label');
+            $nbVisits = $visitRow->getColumn('nb_hits');
+            $nbUniquesVisites = $visitRow->getColumn('nb_uniq_visitors');
+            $nbTime = $visitRow->getColumn('avg_time_on_page');
+            $nbTimeTotal = $formatter->getPrettyTimeFromSeconds($visitRow->getColumn('sum_time_spent'), $displayAsSentence = false);
+            if (strpos($pageTitle, "tikeasy") == false) {
+                $result->addRowFromSimpleArray(array(
+                    'Nom' => $pageTitle,
+                    'Visites' => $nbVisits,
+                    'Vues uniques' => $nbUniquesVisites,
+                    'Temps moyen' => $nbTime,
+                    'Temps total' => $nbTimeTotal
+                ));
+            }
+        }
+
+        return $result;
+    }
+
+    public function getBestExternalApps($idSite, $period, $date)
+    {
+        $data = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => $period,
+            'date' => $date,
+            'segment' => 'eventCategory==EXTERNAL_APP'
+        ));
+        $data->applyQueuedFilters();
+
+        $result = $data->getEmptyClone($keepFilters = false);
+
+        foreach ($data->getRows() as $visitRow) {
+
+            $pageTitle = $visitRow->getColumn('label');
+            $nbVisits = $visitRow->getColumn('nb_visits');
+            $nbUniquesVisites = $visitRow->getColumn('nb_uniq_visitors');
+
+            $result->addRowFromSimpleArray(array(
+                'Nom' => $pageTitle,
+                'Nombre de visites' => $nbVisits,
+                'Nombre de visites par visiteur unique' => $nbUniquesVisites
+            ));
+        }
+
+        return $result;
+    }
+
+
+    /**
+     * Another example method that returns a data table.
+     * @param int    $idSite
+     * @param string $period
+     * @param string $date
+     * @param bool|string $segment
+     * @return DataTable
+     */
+    public function getBestArticlesNT($idSite, $period, $date, $segment = false)
+    {
+        $table = new DataTable();
+
+        $table->addRowFromArray(array(Row::COLUMNS => array('nb_visits' => 5)));
+
+        return $table;
+    }
+
 }

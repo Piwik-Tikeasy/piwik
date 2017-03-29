@@ -29,9 +29,9 @@ class GetPageTitles extends Base
         $this->dimension     = new PageTitle();
         $this->name          = Piwik::translate('Actions_SubmenuPageTitles');
         $this->documentation = Piwik::translate('Actions_PageTitlesReportDocumentation',
-                                                array('<br />', htmlentities('<title>')));
+            array('<br />', htmlentities('<title>')));
 
-        $this->order   = 5;
+        $this->order   = -1;
         $this->metrics = array('nb_hits', 'nb_visits');
         $this->processedMetrics = array(
             new AverageTimeOnPage(),
@@ -72,11 +72,11 @@ class GetPageTitles extends Base
         $view->config->title = $this->name;
 
         $view->config->addTranslation('label', $this->dimension->getName());
-        $view->config->columns_to_display = array('label', 'nb_hits', 'nb_visits', 'bounce_rate',
-                                                  'avg_time_on_page', 'exit_rate', 'avg_time_generation');
-
+        $view->config->addTranslation('sum_time_spent_format', "Temps total sur la page");
+        $view->config->columns_to_display = array('label', 'nb_hits', 'nb_visits','avg_time_on_page', 'exit_rate','sum_time_spent_format');
         $this->addPageDisplayProperties($view);
         $this->addBaseDisplayProperties($view);
+
     }
 
     public function getRelatedReports()

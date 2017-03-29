@@ -64,6 +64,7 @@
         "WidgetSearchCategories": "Search Categories",
         "WidgetSearchKeywords": "Site Search Keywords",
         "WidgetSearchNoResultKeywords": "Search Keywords with No Results",
-        "ActionType": "Action Type"
+        "ActionType": "Action Type",
+        "BestArticlesNT": "BestArticlesNT"
     }
 }

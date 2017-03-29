@@ -27,7 +27,7 @@ class GetPageUrls extends Base
         $this->dimension     = new PageUrl();
         $this->name          = Piwik::translate('Actions_PageUrls');
         $this->documentation = Piwik::translate('Actions_PagesReportDocumentation', '<br />')
-                             . '<br />' . Piwik::translate('General_UsePlusMinusIconsDocumentation');
+            . '<br />' . Piwik::translate('General_UsePlusMinusIconsDocumentation');
 
         $this->actionToLoadSubTables = $this->action;
         $this->order   = 2;
@@ -67,9 +67,9 @@ class GetPageUrls extends Base
     public function configureView(ViewDataTable $view)
     {
         $view->config->addTranslation('label', $this->dimension->getName());
-        $view->config->columns_to_display = array('label', 'nb_hits', 'nb_visits', 'bounce_rate',
-                                                  'avg_time_on_page', 'exit_rate', 'avg_time_generation');
-
+        $view->config->addTranslation('sum_time_spent_format', "Temps total sur la page");
+        $view->config->columns_to_display = array('label', 'nb_hits', 'nb_visits',
+            'avg_time_on_page', 'exit_rate','sum_time_spent_format');
         $this->addPageDisplayProperties($view);
         $this->addBaseDisplayProperties($view);
     }

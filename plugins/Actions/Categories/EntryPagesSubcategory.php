@@ -14,6 +14,6 @@ class EntryPagesSubcategory extends Subcategory
 {
     protected $categoryId = 'General_Actions';
     protected $id = 'Actions_SubmenuPagesEntry';
-    protected $order = 10;
+    protected $order = 28;
 
 }

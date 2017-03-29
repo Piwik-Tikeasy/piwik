@@ -14,6 +14,6 @@ class ExitPagesSubcategory extends Subcategory
 {
     protected $categoryId = 'General_Actions';
     protected $id = 'Actions_SubmenuPagesExit';
-    protected $order = 15;
+    protected $order = 25;
 
 }
