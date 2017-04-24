@@ -6,9 +6,8 @@
  * @license http://www.gnu.org/licenses/gpl-3.0.html GPL v3 or later
  *
  */
-namespace Piwik\Plugins\Actions;
 
-use Piwik\DataTable\Row;
+namespace Piwik\Plugins\Actions;
 
 use Exception;
 use Piwik\Archive;
@@ -100,7 +99,7 @@ class API extends \Piwik\Plugin\API
         foreach ($dataTable->getRows() as $visit) {
             $formatter = new Metrics\Formatter\Html();
             $nbTimeTotal = $formatter->getPrettyTimeFromSeconds($visit->getColumn('13'), $displayAsSentence = false);
-            $visit->addColumn("sum_time_spent_format",$nbTimeTotal);
+            $visit->addColumn("sum_time_spent_format", $nbTimeTotal);
         }
         return $dataTable;
     }
@@ -192,7 +191,7 @@ class API extends \Piwik\Plugin\API
         foreach ($dataTable->getRows() as $visit) {
             $formatter = new Metrics\Formatter\Html();
             $nbTimeTotal = $formatter->getPrettyTimeFromSeconds($visit->getColumn('13'), $displayAsSentence = false);
-            $visit->addColumn("sum_time_spent_format",$nbTimeTotal);
+            $visit->addColumn("sum_time_spent_format", $nbTimeTotal);
         }
         return $dataTable;
     }
@@ -606,21 +605,233 @@ class API extends \Piwik\Plugin\API
     }
 
 
-    /**
-     * Another example method that returns a data table.
-     * @param int    $idSite
-     * @param string $period
-     * @param string $date
-     * @param bool|string $segment
-     * @return DataTable
-     */
-    public function getBestArticlesNT($idSite, $period, $date, $segment = false)
+    public function getTotalSales($idSite, $period, $date, $segment = false)
     {
-        $table = new DataTable();
+        $totalPrestashop = 0;
+        $maxPrestashop = 0;
+        $avgPrestashop = 0;
+        $dataPalladium = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => "year",
+            'date' => date("Y"),
+            'segment' => 'eventName==TOTAL;eventCategory==PALLADIUM'
+        ));
+        $dataPalladium->applyQueuedFilters();
+        $resultPalladium = $dataPalladium->getEmptyClone($keepFilters = false);
 
-        $table->addRowFromArray(array(Row::COLUMNS => array('nb_visits' => 5)));
+        foreach ($dataPalladium->getRows() as $visitRow) {
+            $totalPalladium = $visitRow->getColumn('sum_event_value');
+            $avgPalladium = $visitRow->getColumn('avg_event_value');
+            $maxPalladium = $visitRow->getColumn('max_event_value');
+        }
+        $dataPrestashop = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => $period,
+            'date' => $date,
+            'segment' => 'eventName==TOTAL;eventCategory==PRESTASHOP'
+        ));
+        $dataPrestashop->applyQueuedFilters();
+        foreach ($dataPrestashop->getRows() as $visitRow) {
+            $totalPrestashop = $visitRow->getColumn('sum_event_value');
+            $avgPrestashop = $visitRow->getColumn('avg_event_value');
+            $maxPrestashop = $visitRow->getColumn('max_event_value');
+        }
 
-        return $table;
+        $resultPalladium->addRowFromSimpleArray(array(
+            'Nombre de ventes totales' => $totalPalladium + $totalPrestashop,
+            'Palladium' => $totalPalladium,
+            'Prestashop' => $totalPrestashop,
+            'Moyenne par jour des ventes Palladium' => $avgPalladium,
+            'Maximum des ventes Palladium' => $maxPalladium,
+            'Moyenne par jour des ventes Prestashop' => $avgPrestashop,
+            'Maximum des ventes Prestashop' => $maxPrestashop
+        ));
+        return $resultPalladium;
     }
 
+    public function getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = true, $label, $percent)
+    {
+        $totalPrestashop = 0;
+
+        $dataPalladium = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => "year",
+            'date' => date("Y"),
+            'segment' => 'eventName==TOTAL;eventCategory==PALLADIUM'
+        ));
+        $dataPalladium->applyQueuedFilters();
+        $resultPalladium = $dataPalladium->getEmptyClone($keepFilters = false);
+
+        foreach ($dataPalladium->getRows() as $visitRow) {
+            $totalPalladium = $visitRow->getColumn('sum_event_value');
+        }
+        $dataPrestashop = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => $period,
+            'date' => $date,
+            'segment' => 'eventName==TOTAL;eventCategory==PRESTASHOP'
+        ));
+        $dataPrestashop->applyQueuedFilters();
+        foreach ($dataPrestashop->getRows() as $visitRow) {
+            $totalPrestashop = $visitRow->getColumn('sum_event_value');
+        }
+
+        $totalSales = $totalPalladium+$totalPrestashop;
+        if ($isPalladium) {
+            $segment = "eventCategory==PALLADIUM";
+        } else {
+            $segment = "eventCategory==PRESTASHOP";
+        }
+        $data = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => "year",
+            'date' => date("Y"),
+            'segment' => $segment
+        ));
+        $data->applyQueuedFilters();
+        $result = $data->getEmptyClone($keepFilters = false);
+
+        $total = 0;
+        $max = 0;
+        foreach ($data->getRows() as $visitRow) {
+            if ($visitRow->getColumn('label') == $label) {
+                $total = $visitRow->getColumn('sum_event_value');
+                $max = $visitRow->getColumn('max_event_value');
+                $avgPerDey = $visitRow->getColumn('avg_event_value');
+            }
+        }
+        $avg= 100*$total/$totalSales;
+        $result->addRowFromSimpleArray(array(
+            'Total' => $total,
+            'Maximum par jour' => $max,
+            'Moyenne par jour' => $avgPerDey,
+            'Pourcentage du parc' =>  $avg." %"
+        ));
+        return $result;
+    }
+
+    public static function getTotalEventByType($idSite, $period, $date, $segment = false, $isPalladium, $type)
+    {
+        if ($isPalladium) {
+            $segment = "eventName==" . $type . ";eventCategory==PALLADIUM";
+        } else {
+            $segment = "eventName==" . $type . ";eventCategory==PRESTASHOP";
+        }
+        $data = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => $period,
+            'date' => $date,
+            'segment' => $segment
+        ));
+        $data->applyQueuedFilters();
+
+        $threeG = 0;
+        foreach ($data->getRows() as $visitRow) {
+            $threeG = $visitRow->getColumn('sum_event_value');
+        }
+        return $threeG;
+    }
+
+
+    public static function getDailyStatsByType($idSite, $period, $date, $segment = false, $isPalladium)
+    {
+        $totalSales = 0;
+        if ($isPalladium) {
+            $segment = "eventName==TOTAL;eventCategory==PALLADIUM";
+        } else {
+            $segment = "eventName==TOTAL;eventCategory==PRESTASHOP";
+        }
+        $data = \Piwik\API\Request::processRequest('Events.getName ', array(
+            'idSite' => $idSite,
+            'period' => $period,
+            'date' => $date,
+            'segment' => $segment
+        ));
+        $data->applyQueuedFilters();
+        $result = $data->getEmptyClone($keepFilters = false);
+
+        foreach ($data->getRows() as $visitRow) {
+            if ($visitRow->getColumn('label') == "TOTAL") {
+                $totalSales = $visitRow->getColumn('sum_event_value');
+            }
+        }
+        $threeG = self::getTotalEventByType($idSite, $period, $date, $segment = false, $isPalladium, "AVEC_3G");
+        // $factorInstall = self::getTotalEventByType($idSite, $period, $date, $segment = false, $isPalladium, "OFFRE_POSTIER");
+        $postierOffer = self::getTotalEventByType($idSite, $period, $date, $segment = false, $isPalladium, "OFFRE_POSTIER");
+        $prepaidWifi = self::getTotalEventByType($idSite, $period, $date, $segment = false, $isPalladium, "PREPAYE_WIFI");
+        $prepaid3g = self::getTotalEventByType($idSite, $period, $date, $segment = false, $isPalladium, "PREPAYE_3G");
+        $result->addRowFromSimpleArray(array(
+            'Total des ventes' => $totalSales,
+            'En 3G' => $threeG,
+            'En wifi' => $totalSales - $threeG,
+            'Installations facteurs' => 0,
+            'Offres postier' => $postierOffer,
+            'Prepayés wifi' => $prepaidWifi,
+            'Prépayés 3g' => $prepaid3g
+        ));
+        return $result;
+    }
+
+    public function getPalladiumStats($idSite, $period, $date, $segment = false)
+    {
+        return self::getDailyStatsByType($idSite, $period, $date, $segment = false, true);
+    }
+
+    public function getPrestashopStats($idSite, $period, $date, $segment = false)
+    {
+
+        return self::getDailyStatsByType($idSite, $period, $date, $segment = false, false);
+    }
+
+    public static function getFactorInstallsPalladium($idSite, $period, $date, $segment = false)
+    {
+
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = true, "INSTALLATION_FACTEUR", "POURCENTAGE_INSTALLATION_FACTEUR");
+    }
+
+    public static function getFactorInstallsPrestashop($idSite, $period, $date, $segment = false)
+    {
+
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = false, "INSTALLATION_FACTEUR", "POURCENTAGE_INSTALLATION_FACTEUR");
+    }
+
+    public static function get3GStatsPalladium($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, true, "AVEC_3G", "POURCENTAGE_3G");
+    }
+
+    public static function get3GStatsPrestashop($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, false, "AVEC_3G", "POURCENTAGE_3G");
+    }
+
+    public function getPostiersOfferPalladium($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = true, "OFFRE_POSTIER", "POURCENTAGE_POSTIER");
+    }
+
+    public function getPrepaid3GPalladium($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = true, "PREPAYE_3G", "POURCENTAGE_PREPAYE_3G");
+    }
+
+    public function getPrepaidWifiPalladium($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = true, "PREPAYE_WIFI", "POURCENTAGE_PREPAYE_WIFI");
+    }
+
+    public function getPostiersOfferPrestashop($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = false, "OFFRE_POSTIER", "POURCENTAGE_POSTIER");
+    }
+
+    public function getPrepaid3GPrestashop($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = false, "PREPAYE_3G", "POURCENTAGE_PREPAYE_3G");
+    }
+
+    public function getPrepaidWifiPrestashop($idSite, $period, $date, $segment = false)
+    {
+        return self::getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = false, "PREPAYE_WIFI", "POURCENTAGE_PREPAYE_WIFI");
+    }
 }

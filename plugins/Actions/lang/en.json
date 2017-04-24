@@ -65,6 +65,9 @@
         "WidgetSearchKeywords": "Site Search Keywords",
         "WidgetSearchNoResultKeywords": "Search Keywords with No Results",
         "ActionType": "Action Type",
-        "BestArticlesNT": "BestArticlesNT"
+        "BestArticlesNT": "BestArticlesNT",
+        "GetSalesPalladium": "GetSalesPalladium",
+        "GetTotalSales": "GetTotalSales",
+        "GetPalladiumStats": "GetPalladiumStats"
     }
 }
