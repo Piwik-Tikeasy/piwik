@@ -652,7 +652,7 @@ class API extends \Piwik\Plugin\API
     public function getDetailByType($idSite, $period, $date, $segment = false, $isPalladium = true, $label, $percent)
     {
         $totalPrestashop = 0;
-
+        $avgPerDey = 0;
         $dataPalladium = \Piwik\API\Request::processRequest('Events.getName ', array(
             'idSite' => $idSite,
             'period' => "year",
@@ -676,7 +676,7 @@ class API extends \Piwik\Plugin\API
             $totalPrestashop = $visitRow->getColumn('sum_event_value');
         }
 
-        $totalSales = $totalPalladium+$totalPrestashop;
+        $totalSales = $totalPalladium + $totalPrestashop;
         if ($isPalladium) {
             $segment = "eventCategory==PALLADIUM";
         } else {
@@ -700,12 +700,12 @@ class API extends \Piwik\Plugin\API
                 $avgPerDey = $visitRow->getColumn('avg_event_value');
             }
         }
-        $avg= 100*$total/$totalSales;
+        $avg = 100 * $total / $totalSales;
         $result->addRowFromSimpleArray(array(
             'Total' => $total,
             'Maximum par jour' => $max,
             'Moyenne par jour' => $avgPerDey,
-            'Pourcentage du parc' =>  $avg." %"
+            'Pourcentage du parc' => $avg . " %"
         ));
         return $result;
     }
